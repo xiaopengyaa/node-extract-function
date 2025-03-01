@@ -19,7 +19,9 @@ const globalObjs = [
 
 // 主函数名称
 const MAIN_FUNCTION = 'setupSearchReporter'
+// const MAIN_FUNCTION = 'mainFunction'
 const inputFilePath = './input/search.js'
+// const inputFilePath = './input/test.js'
 const exportFilePath = `./output/${MAIN_FUNCTION}.js`
 
 // 收集类的静态属性和方法
@@ -58,22 +60,28 @@ function collectDependencies(
         // 处理函数声明
         FunctionDeclaration(path) {
           if (path.node.id?.name === targetName) {
-            collectDeclaration(path, collected, output)
-            found = true
+            const flag = collectDeclaration(path, collected, output)
+            if (flag) {
+              found = true
+            }
           }
         },
         // 处理变量声明（包含所有类型）
         VariableDeclarator(path) {
           if (path.node.id.name === targetName) {
-            collectDeclaration(path.parentPath, collected, output)
-            found = true
+            const flag = collectDeclaration(path.parentPath, collected, output)
+            if (flag) {
+              found = true
+            }
           }
         },
         // 处理类声明
         ClassDeclaration(path) {
           if (path.node.id.name === targetName) {
-            collectDeclaration(path, collected, output)
-            found = true
+            const flag = collectDeclaration(path, collected, output)
+            if (flag) {
+              found = true
+            }
           }
         },
       })
@@ -85,12 +93,9 @@ function collectDependencies(
   // 从最新添加的代码中提取依赖
   const lastAdded = output[output.length - 1]
   const dependencies = findExternalDependencies(lastAdded.code)
-  console.log('output', output, output.length)
-  console.log('dependencies', dependencies, dependencies.length)
   while (dependencies.length) {
     const ident = dependencies.shift()
     if (!collected.has(ident)) {
-      console.log('收集依赖ing')
       collectDependencies(ast, ident, collected, output)
     }
   }
@@ -101,13 +106,15 @@ function collectDeclaration(path, collected, output) {
   const node = path.node
   const name = getDeclarationName(node)
 
-  if (!name || collected.has(name)) return
+  if (!name || collected.has(name)) return false
 
   // 生成原始代码
   const code = generator(node).code
   output.push({ name, code })
   collected.add(name)
   console.log('收集依赖：', name)
+
+  return true
 }
 
 // 获取声明名称
