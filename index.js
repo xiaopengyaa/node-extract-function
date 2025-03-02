@@ -6,10 +6,10 @@ const t = require('@babel/types')
 const { globalObjs } = require('./globalObjs')
 
 // 主函数名称
-// const MAIN_FUNCTION = 'setupSearchReporter'
-const MAIN_FUNCTION = 'createHandler'
-// const INPUT_PATH = './input/search.js'
-const INPUT_PATH = './input/test.js'
+const MAIN_FUNCTION = 'Episode'
+// const MAIN_FUNCTION = 'init'
+const INPUT_PATH = './input/search.js'
+// const INPUT_PATH = './input/test.js'
 const EXPORT_PATH = `./output/${MAIN_FUNCTION}.js`
 const TYPE = {
   FUNCTION: 'FUNCTION',
@@ -45,11 +45,25 @@ function collectDependencies(
             }
           }
         },
+        // 处理函数表达式
+        FunctionExpression(path) {
+          if (path.node.id?.name === targetName) {
+            const flag = collectDeclaration(
+              path,
+              collected,
+              outputs,
+              TYPE.FUNCTION
+            )
+            if (flag) {
+              found = true
+            }
+          }
+        },
         // 处理变量声明（包含所有类型）
         VariableDeclarator(path) {
           if (path.node.id.name === targetName) {
             const flag = collectDeclaration(
-              path.parentPath,
+              path,
               collected,
               outputs,
               TYPE.VARIABLE
@@ -98,7 +112,17 @@ function collectDeclaration(path, collected, outputs, type) {
   if (!name || collected.has(name)) return false
 
   // 生成原始代码
-  const code = generator(node).code
+  let code
+  if (t.isVariableDeclarator(node)) {
+    // 变量声明只生成当前的那一个
+    const cloneParentNode = t.cloneNode(path.parentPath.node)
+    cloneParentNode.declarations = cloneParentNode.declarations.filter(
+      (d) => d.id.name === name
+    )
+    code = generator(cloneParentNode).code
+  } else {
+    code = generator(node).code
+  }
   outputs.push({ name, code, type, start: node.start, node })
   collected.add(name)
   console.log('收集依赖：', name)
@@ -109,8 +133,9 @@ function collectDeclaration(path, collected, outputs, type) {
 // 获取声明名称
 function getDeclarationName(node) {
   if (t.isFunctionDeclaration(node)) return node.id?.name
-  if (t.isVariableDeclaration(node)) return node.declarations[0]?.id?.name
+  if (t.isVariableDeclarator(node)) return node.id?.name
   if (t.isClassDeclaration(node)) return node.id?.name
+  if (t.isFunctionExpression(node)) return node.id?.name
   return null
 }
 
@@ -126,7 +151,7 @@ function findExternalDependencies(output) {
 
   traverse(ast, {
     Identifier(path) {
-      console.log('output', output.name)
+      console.log(`依赖判断${output.name}：`, path.node.name)
       if (isExternalDependency(path)) {
         if (path.node.name) {
           dependencies.add(path.node.name)
@@ -155,7 +180,7 @@ function isExternalDependency(path) {
       return false
     }
   }
-  if (parentPath.isVariableDeclarator()) {
+  if (parentPath.isVariableDeclarator() && !path.isIdentifier()) {
     return false
   }
   if (parentPath.isFunctionDeclaration()) {
