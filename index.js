@@ -6,10 +6,10 @@ const t = require('@babel/types')
 const { globalObjs } = require('./globalObjs')
 
 // 主函数名称
-const MAIN_FUNCTION = 'Episode'
-// const MAIN_FUNCTION = 'init'
-const INPUT_PATH = './input/search.js'
-// const INPUT_PATH = './input/test.js'
+// const MAIN_FUNCTION = 'Episode'
+const MAIN_FUNCTION = 'Student'
+// const INPUT_PATH = './input/search.js'
+const INPUT_PATH = './input/test.js'
 const EXPORT_PATH = `./output/${MAIN_FUNCTION}.js`
 const TYPE = {
   FUNCTION: 'FUNCTION',
@@ -24,8 +24,6 @@ function collectDependencies(
   collected = new Set(),
   outputs = []
 ) {
-  if (collected.has(targetName)) return
-
   let found = false
 
   traverse(ast, {
@@ -87,6 +85,24 @@ function collectDependencies(
             }
           }
         },
+        ExpressionStatement(path) {
+          const expression = path.node.expression
+          const hasExpression =
+            t.isMemberExpression(expression.left) &&
+            hasExpressionName(expression.left.object, targetName)
+
+          if (hasExpression) {
+            const flag = collectDeclaration(
+              path,
+              collected,
+              outputs,
+              TYPE.FUNCTION
+            )
+            if (flag) {
+              found = true
+            }
+          }
+        },
       })
     },
   })
@@ -97,11 +113,20 @@ function collectDependencies(
   const lastAdded = outputs[outputs.length - 1]
   const dependencies = findExternalDependencies(lastAdded)
   while (dependencies.length) {
-    const ident = dependencies.shift()
-    if (!collected.has(ident)) {
-      collectDependencies(ast, ident, collected, outputs)
+    const exDepName = dependencies.shift()
+    collectDependencies(ast, exDepName, collected, outputs)
+  }
+}
+
+function hasExpressionName(object, targetName) {
+  if (t.isMemberExpression(object)) {
+    return hasExpressionName(object.object, targetName)
+  } else if (t.isIdentifier(object)) {
+    if (object.name === targetName) {
+      return true
     }
   }
+  return false
 }
 
 // 收集声明节点
@@ -109,7 +134,7 @@ function collectDeclaration(path, collected, outputs, type) {
   const node = path.node
   const name = getDeclarationName(node)
 
-  if (!name || collected.has(name)) return false
+  if (!name || collected.has(node.start)) return false
 
   // 生成原始代码
   let code
@@ -124,7 +149,7 @@ function collectDeclaration(path, collected, outputs, type) {
     code = generator(node).code
   }
   outputs.push({ name, code, type, start: node.start, node })
-  collected.add(name)
+  collected.add(node.start)
   console.log('收集依赖：', name)
 
   return true
@@ -136,6 +161,7 @@ function getDeclarationName(node) {
   if (t.isVariableDeclarator(node)) return node.id?.name
   if (t.isClassDeclaration(node)) return node.id?.name
   if (t.isFunctionExpression(node)) return node.id?.name
+  if (t.isExpressionStatement(node)) return node.expression.left.property.name
   return null
 }
 
@@ -200,6 +226,7 @@ function isExternalDependency(path) {
 
 // 主函数
 function extractExport(inputFile, exportName, outputFile) {
+  const start = process.hrtime()
   const code = fs.readFileSync(inputFile, 'utf-8')
   const ast = parser.parse(code, {
     sourceType: 'module',
@@ -220,6 +247,9 @@ function extractExport(inputFile, exportName, outputFile) {
     .join('\n')
 
   fs.outputFileSync(outputFile, allCode, {})
+  const end = process.hrtime(start)
+  console.log(`收集总数： ${outputs.length}`)
+  console.log(`总共耗时：${end[0]}秒`)
   console.log(`输出已保存至 ${outputFile}`)
 }
 
