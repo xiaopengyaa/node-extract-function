@@ -1,11 +1,21 @@
 // 传统构造函数写法
 // var a = 1
-// var a = 2
+var a = 2
 var obj = {
   Person: {},
 }
+function b() {
+  console.log('b')
+}
+a = 10
 function Person(name) {
   this.name = name
+}
+
+modifyA()
+
+function modifyA() {
+  a = 3
 }
 
 Person.prototype.sayHello = function () {
@@ -25,8 +35,11 @@ class Student extends Person {
   }
 
   study() {
-    console.log(`${this.name + a} is studying`)
+    b()
+    console.log(`${this.grade} is grade`)
+    console.log(`${this.name + a + this.age} is studying`)
     console.log(`${this.score} is _score`)
+    console.log(`${this.person} is _person`)
   }
 
   static getSchool() {
@@ -34,11 +47,26 @@ class Student extends Person {
   }
 }
 
+Student.prototype.stu = 'stu'
+
 // 使用 Object.defineProperty
 Object.defineProperty(Student.prototype, 'score', {
   get() {
-    return a
+    return 123
   },
 })
+
+// 使用 Object.defineProperty
+Object.defineProperty(Person.prototype, 'person', {
+  get() {
+    return 'person'
+  },
+})
+
+c()
+
+function c() {
+  Person.d = 1
+}
 
 var a = 20
