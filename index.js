@@ -13,7 +13,7 @@ const {
 // 主函数名称
 // const MAIN_FUNCTION = 'Episode'
 // const INPUT_PATH = './input/search.js'
-const MAIN_FUNCTION = 'CustomProcessor'
+const MAIN_FUNCTION = 'main'
 const INPUT_PATH = './input/test.js'
 const EXPORT_PATH = `./output/${MAIN_FUNCTION}.js`
 const PARSE_OPTIONS = {
@@ -154,7 +154,7 @@ function collectDeclaration(path, collected, outputs) {
   const node = path.node
   const name = getDeclarationName(node)
 
-  if (collected.has(node.start)) return ''
+  if (collected.has(node.start) || t.isIdentifier(node)) return ''
 
   // 生成原始代码
   let code

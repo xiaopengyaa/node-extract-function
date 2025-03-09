@@ -12,6 +12,8 @@ function needCollect(path, outputs) {
     (t.isIdentifier(path.node) &&
       t.isVariableDeclarator(path.parentPath.node) &&
       path.node.name !== path.parentPath.node.id.name) ||
+    // 标识符作为对象属性不需要收集
+    isObjectPropertyCall(path) ||
     // 被其他输出包含的语句不需要收集
     outputs.some((o) => isNodeInside(o.node, path.node))
   ) {
@@ -75,14 +77,46 @@ function findDefinePropertyPath(path) {
   return p
 }
 
-// 判断是否为目标表达式
-function hasExpressionName(node, targetName) {
-  let n = node
-  while (n) {
-    if (n.name === targetName) {
-      return true
+// 是否ObjectProperty的调用语句
+function isObjectPropertyCall(path) {
+  if (t.isIdentifier(path.node)) {
+    let checkPath = path.parentPath
+    while (checkPath) {
+      if (t.isObjectProperty(checkPath.node)) {
+        return true
+      }
+      checkPath = checkPath.parentPath
     }
-    n = n.object
+  }
+  return false
+}
+
+// 是否MemberExpression最左边的名字
+function isExpressionLeftName(path, targetName) {
+  if (t.isMemberExpression(path.node)) {
+    let n = path.node
+    while (n) {
+      const name = n.object ? n.object.name : n.name
+      if (name === targetName) {
+        return true
+      }
+      n = n.object
+    }
+  }
+  return false
+}
+
+// 判断对象属性是否动态属性
+function isDynamicProperty(path, targetName) {
+  if (t.isMemberExpression(path.node)) {
+    let n = path.node
+    while (n) {
+      const name = n.property ? n.property.name : n.name
+      if (name === targetName && n.computed) {
+        return true
+      }
+      n = n.object
+    }
   }
   return false
 }
@@ -128,6 +162,12 @@ function isExternalDependency(path) {
     if (parentObject.type === 'ThisExpression') {
       return false
     }
+    if (
+      !isDynamicProperty(parentPath, path.node.name) &&
+      !isExpressionLeftName(parentPath, path.node.name)
+    ) {
+      return false
+    }
     if (globalObjs.includes(parentObjectName)) {
       return false
     }
@@ -160,7 +200,6 @@ module.exports = {
   findPath,
   findAssignmentPath,
   findDefinePropertyPath,
-  hasExpressionName,
   getDeclarationName,
   isExternalDependency,
   isNodeInside,
