@@ -7,7 +7,7 @@ const {
   findPath,
   getDeclarationName,
   isExternalDependency,
-  isNodeInside,
+  needCollect,
 } = require('./utils/common')
 
 // 主函数名称
@@ -126,7 +126,7 @@ function findExternalDependencies(output, collected, outputs) {
             paths.push(p)
           })
           paths.forEach((p) => {
-            // 两个语句不在同一个作用域下不需要收集
+            // 两个语句不在同一个作用域下不需要收集（暂时不考虑其他作用域的情况）
             if (
               !p.parentPath ||
               !binding.path.parentPath ||
@@ -134,15 +134,7 @@ function findExternalDependencies(output, collected, outputs) {
             ) {
               return
             }
-            if (
-              // export语句不需要收集
-              t.isExportNamedDeclaration(p.node) ||
-              // 调用语句不需要收集
-              (t.isIdentifier(p.node) &&
-                t.isCallExpression(p.parentPath.node)) ||
-              // 被其他输出包含的语句不需要收集
-              outputs.some((o) => isNodeInside(o.node, p.node))
-            ) {
+            if (!needCollect(p, outputs)) {
               return
             }
             const path = findPath(p) || p

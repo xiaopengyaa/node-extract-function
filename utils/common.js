@@ -1,8 +1,41 @@
 const { globalObjs } = require('./globalObjs')
 const t = require('@babel/types')
 
+// 判断依赖是否需要收集
+function needCollect(path, outputs) {
+  if (
+    // export语句不需要收集
+    t.isExportNamedDeclaration(path.node) ||
+    // 调用语句不需要收集
+    (t.isIdentifier(path.node) && t.isCallExpression(path.parentPath.node)) ||
+    // 标识符不在变量声明语句左边不需要收集
+    (t.isIdentifier(path.node) &&
+      t.isVariableDeclarator(path.parentPath.node) &&
+      path.node.name !== path.parentPath.node.id.name) ||
+    // 被其他输出包含的语句不需要收集
+    outputs.some((o) => isNodeInside(o.node, path.node))
+  ) {
+    return false
+  }
+  return true
+}
+
+// 找到对应的path
 function findPath(path) {
-  return findAssignmentPath(path) || findDefinePropertyPath(path)
+  return (
+    findVariablePath(path) ||
+    findAssignmentPath(path) ||
+    findDefinePropertyPath(path)
+  )
+}
+
+// 找到变量声明节点
+function findVariablePath(path) {
+  let p = null
+  if (t.isVariableDeclarator(path.node)) {
+    p = path
+  }
+  return p
 }
 
 // 如果是对象属性，需要找到最近的赋值语句
@@ -29,8 +62,9 @@ function findDefinePropertyPath(path) {
     while (checkPath) {
       if (
         t.isCallExpression(checkPath.node) &&
-        checkPath.node.callee.object.name === 'Object' &&
-        checkPath.node.callee.property.name === 'defineProperty'
+        t.isMemberExpression(checkPath.node.callee) &&
+        checkPath.node.callee.object?.name === 'Object' &&
+        checkPath.node.callee.property?.name === 'defineProperty'
       ) {
         p = checkPath
         break
@@ -68,13 +102,16 @@ function getDeclarationName(node) {
     return node.id?.name
   }
   if (t.isExpressionStatement(node)) {
-    return node.expression.left.property.name
+    return node.expression.left?.property?.name
   }
   if (t.isAssignmentExpression(node)) {
     return node.left.property ? node.left.property.name : node.left.name
   }
   if (t.isCallExpression(node)) {
-    return node.callee.property.name
+    return node.callee?.property?.name
+  }
+  if (t.isIdentifier(node)) {
+    return node.name
   }
   return ''
 }
@@ -127,4 +164,5 @@ module.exports = {
   getDeclarationName,
   isExternalDependency,
   isNodeInside,
+  needCollect,
 }
