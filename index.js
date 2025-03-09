@@ -7,18 +7,19 @@ const {
   findPath,
   getDeclarationName,
   isExternalDependency,
+  isNodeInside,
 } = require('./utils/common')
 
 // 主函数名称
 // const MAIN_FUNCTION = 'Episode'
 // const INPUT_PATH = './input/search.js'
-const MAIN_FUNCTION = 'Student'
+const MAIN_FUNCTION = 'CustomProcessor'
 const INPUT_PATH = './input/test.js'
 const EXPORT_PATH = `./output/${MAIN_FUNCTION}.js`
 const PARSE_OPTIONS = {
   sourceType: 'module',
   attachComment: false,
-  plugins: ['jsx', 'typescript', 'classProperties'],
+  plugins: ['jsx', 'typescript', 'classProperties', 'decorators-legacy'],
 }
 
 // 初始化
@@ -110,17 +111,6 @@ function findExternalDependencies(output, collected, outputs) {
       ) {
         const binding = path.scope.getBinding(path.node.name)
         if (binding) {
-          if (binding.scope.uid !== 0) {
-            const output = collectDeclaration(
-              binding.scope.path,
-              collected,
-              outputs
-            )
-            if (output) {
-              findExternalDependencies(output, collected, outputs)
-            }
-            return
-          }
           const paths = [binding.path]
           const startSet = new Set([binding.path.node.start])
           const otherPaths = [
@@ -129,21 +119,36 @@ function findExternalDependencies(output, collected, outputs) {
           ]
           // 去重
           otherPaths.forEach((p) => {
-            if (!startSet.has(p.node.start)) {
-              startSet.add(p.node.start)
-              paths.push(p)
+            if (startSet.has(p.node.start)) {
+              return
             }
+            startSet.add(p.node.start)
+            paths.push(p)
           })
           paths.forEach((p) => {
-            // 两个语句需要在同一个作用域下
+            // 两个语句不在同一个作用域下不需要收集
             if (
-              p?.parentPath.scope.uid === binding.path?.parentPath.scope.uid
+              !p.parentPath ||
+              !binding.path.parentPath ||
+              p.parentPath.scope.uid !== binding.path.parentPath.scope.uid
             ) {
-              const path = findPath(p) || p
-              const output = collectDeclaration(path, collected, outputs)
-              if (output) {
-                findExternalDependencies(output, collected, outputs)
-              }
+              return
+            }
+            if (
+              // export语句不需要收集
+              t.isExportNamedDeclaration(p.node) ||
+              // 调用语句不需要收集
+              (t.isIdentifier(p.node) &&
+                t.isCallExpression(p.parentPath.node)) ||
+              // 被其他输出包含的语句不需要收集
+              outputs.some((o) => isNodeInside(o.node, p.node))
+            ) {
+              return
+            }
+            const path = findPath(p) || p
+            const output = collectDeclaration(path, collected, outputs)
+            if (output) {
+              findExternalDependencies(output, collected, outputs)
             }
           })
         }

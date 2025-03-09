@@ -55,13 +55,26 @@ function hasExpressionName(node, targetName) {
 
 // 获取声明名称
 function getDeclarationName(node) {
-  if (t.isFunctionDeclaration(node)) return node.id?.name
-  if (t.isVariableDeclarator(node)) return node.id?.name
-  if (t.isClassDeclaration(node)) return node.id?.name
-  if (t.isFunctionExpression(node)) return node.id?.name
-  if (t.isExpressionStatement(node)) return node.expression.left.property.name
+  if (t.isFunctionDeclaration(node)) {
+    return node.id?.name
+  }
+  if (t.isVariableDeclarator(node)) {
+    return node.id?.name
+  }
+  if (t.isClassDeclaration(node)) {
+    return node.id?.name
+  }
+  if (t.isFunctionExpression(node)) {
+    return node.id?.name
+  }
+  if (t.isExpressionStatement(node)) {
+    return node.expression.left.property.name
+  }
   if (t.isAssignmentExpression(node)) {
     return node.left.property ? node.left.property.name : node.left.name
+  }
+  if (t.isCallExpression(node)) {
+    return node.callee.property.name
   }
   return ''
 }
@@ -97,7 +110,13 @@ function isExternalDependency(path) {
   // 排除当前作用域内的定义
   const objectName = path.node.name
   const binding = path.scope.getBinding(objectName)
-  return !binding || binding.scope.uid !== path.scope.uid
+  return (
+    !binding || binding.scope.uid === 0 || binding.scope.uid !== path.scope.uid
+  )
+}
+
+function isNodeInside(parentNode, childNode) {
+  return childNode.start >= parentNode.start && childNode.end <= parentNode.end
 }
 
 module.exports = {
@@ -107,4 +126,5 @@ module.exports = {
   hasExpressionName,
   getDeclarationName,
   isExternalDependency,
+  isNodeInside,
 }
